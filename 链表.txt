@@ -1,0 +1,39 @@
+// console.cpp : 定义控制台应用程序的入口点。
+//双向链表
+
+#include "stdafx.h"
+#include <Windows.h>
+#include <iostream>
+using namespace std;
+struct student {
+	int age;
+	student *prev;
+	student *next;
+};
+int main()
+{
+
+	student *head, *h1, *h2;
+	h2 = (struct student*)malloc(sizeof(struct student));
+	head = h2;
+	cout << "输入:" << endl;
+	scanf("%d", &h2->age);
+	for(int i=1;i<=9;i++)
+	{
+		h1 = (student*)malloc(sizeof(struct student));
+		scanf("%d", &h1->age);
+		h2->next = h1;
+		h1->prev = h2;
+		h2 = h1;
+
+	}
+	head -> prev = h2;
+	head = head->prev;
+	for(int i=0;i<=9;i++)
+	{
+		cout << "head:" << head->age << endl;
+		head = head->prev;
+	}
+	system("pause");
+    return 0;
+}
