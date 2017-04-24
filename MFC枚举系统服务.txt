@@ -1,0 +1,25 @@
+#incldue <winsvc.h>
+void main()
+{
+	LPENUM_SERVICE_STATUS status = NULL;
+	DWORD size = 0, num = 0;
+	SC_HANDLE Manager = OpenSCManager(NULL, NULL, SC_MANAGER_ALL_ACCESS);
+	if (!Manager)
+		MessageBox(_T("加载服务控制器失败，请以管理员权限运行程序"), _T("错误"), NULL);
+	else
+	{
+		EnumServicesStatus(Manager, SERVICE_DRIVER, SERVICE_STATE_ALL, status, size, &size, &num, NULL);
+		status = (LPENUM_SERVICE_STATUS)LocalAlloc(LPTR, size);
+		if (EnumServicesStatus(Manager,SERVICE_DRIVER, SERVICE_STATE_ALL, status, size, &size, &num, NULL))
+		{
+			for (DWORD i = 0; i <= num; i++)
+			{
+				list.AddString(status[i].lpServiceName);
+			}
+		}
+		else
+		{
+			MessageBox(_T("无法枚举系统服务"), _T("未知错误"), NULL);
+		}
+	}
+}

@@ -1,0 +1,51 @@
+ VOID readfile()
+ {
+	 HANDLE hFile=NULL;  
+    IO_STATUS_BLOCK ioStatus;  
+    NTSTATUS    ntStatus;  
+    OBJECT_ATTRIBUTES object_attributes;  
+  
+    UNICODE_STRING uFileName=RTL_CONSTANT_STRING(L"\\??\\C:\\port.txt");  
+  
+    DbgPrint("ReadLog");  
+  
+    InitializeObjectAttributes(  
+        &object_attributes,  
+        &uFileName,  
+        OBJ_CASE_INSENSITIVE|OBJ_KERNEL_HANDLE,  
+        NULL,  
+        NULL);  
+      
+    ntStatus=ZwCreateFile(  
+        &hFile,  
+        GENERIC_READ|GENERIC_WRITE,  
+        &object_attributes,  
+        &ioStatus,  
+        NULL,  
+        FILE_ATTRIBUTE_NORMAL,  
+        FILE_SHARE_READ,  
+        FILE_OPEN_IF,  
+        FILE_NON_DIRECTORY_FILE|FILE_RANDOM_ACCESS|FILE_SYNCHRONOUS_IO_NONALERT,  
+        NULL,  
+        0);  
+    if (ntStatus==STATUS_SUCCESS)  
+    {     
+        PVOID buffer;  
+        ULONG Length = 10;  
+        ULONG dwPort;  
+        ANSI_STRING AnsiString1;  
+        UNICODE_STRING UnicodeString1;  
+  
+        buffer = ExAllocatePool(NonPagedPool, 10);  
+        ntStatus=ZwReadFile(  
+            hFile,  
+            NULL,  
+            NULL,  
+            NULL,  
+            &ioStatus,  
+            buffer,  
+            Length,  
+            NULL,  
+            NULL);  
+    }
+ }

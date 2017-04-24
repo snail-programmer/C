@@ -1,0 +1,28 @@
+typedef NTSTATUS(*NtOpen)(PHANDLE pout, ACCESS_MASK des, POBJECT_ATTRIBUTES attr, PCLIENT_ID id); //定义原函数别名
+NtOpen realaddr;
+typedef struct ServiceDescriptorEntry{ 
+ unsigned int *ServiceTableBase;          //指向系统服务程序的地址(SSDT)  
+ unsigned int *ServiceCounterTableBase;   //指向另一个索引表，该表包含了每个服务表项被调用的次数
+ unsigned int NumberOfServices;           //表示当前系统所支持的服务个数  
+ unsigned char *ParamTableBase;           //指向SSPT中的参数地址，它们都包含了NumberOfService这么多个数组单元  
+} ServiceDescriptorTableEntry , *PServiceDescriptorTableEntry;
+//函数原型
+NTSTATUS MyNtOpenProcess(
+	PHANDLE ProcessHandle,
+	ACCESS_MASK DesireAccess,
+	POBJECT_ATTRIBUTES ObjectAttributes,
+	PCLIENT_ID ClientID);
+//拦截函数
+ NTSTATUS MyNtOpenProcess( 
+             PHANDLE ProcessHandle,  
+             ACCESS_MASK DesireAccess,  
+             POBJECT_ATTRIBUTES ObjectAttributes,  
+             PCLIENT_ID ClientID)  
+			{
+				if((long)ClientID->UniqueProcess==protect_pid)
+				{
+				    return STATUS_ACCESS_DENIED;
+				}
+			  else
+				return (realaddr(ProcessHandle,DesireAccess,ObjectAttributes,ClientID));
+			}

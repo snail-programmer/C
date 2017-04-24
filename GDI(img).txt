@@ -1,0 +1,49 @@
+GDI+(gif)
+	CMclearDlg *pdlg = NULL;
+	GdiplusStartupInput gdiplus;
+	ULONG_PTR longdi;
+	GdiplusStartup(&longdi, &gdiplus, 0);
+	Bitmap *bmp;
+	bmp = Bitmap::FromFile(L"d:\\loading.gif");
+	UINT dimension;
+	UINT framecout;
+	dimension = bmp->GetFrameDimensionsCount();
+	GUID *guid = new GUID[dimension];
+	bmp->GetFrameDimensionsList(guid, dimension);
+	framecout = bmp->GetFrameCount(guid);
+	GUID id = FrameDimensionTime;
+	CDC *pdc = AfxGetApp()->m_pMainWnd->GetDC();
+	Graphics ph(pdc->m_hDC);
+	UINT index = 0;
+	while (TRUE)
+	{
+
+		if (state)
+		{
+			Sleep(5);
+			ph.DrawImage(bmp, 20, 325, 30, 30);
+			if (index >= framecout)
+				index = 0;
+			bmp->SelectActiveFrame(&id, index++);
+		}
+		else
+		{
+			ph.DrawImage(NULL, 20, 325, 30, 30);
+			ExitThread(0);
+		}
+	}
+
+
+
+
+
+<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+GDI+(loadfromfile)
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+HBITMAP bitmap = (HBITMAP)LoadImage(NULL, _T("path"), IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+	CBitmap bmp;
+	bmp.Attach(bitmap);
+	CDC *pdc = GetDC();
+	dc.CreateCompatibleDC(pdc);
+	dc.SelectObject(bmp);
+	pdc->StretchBlt(0, 0, 200, 200, &dc, 20, 20, 200, 200,SRCCOPY)

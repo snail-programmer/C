@@ -1,0 +1,307 @@
+//根据SSDT表基址+索引*4计算内核函数地址
+#include <ntddk.h>
+typedef struct ServiceDescriptorEntry  { 
+ unsigned int *ServiceTableBase;          //指向系统服务程序的地址(SSDT)  
+ unsigned int *ServiceCounterTableBase;   //指向另一个索引表，该表包含了每个服务表项被调用的次数；不过这个值只在Checkd Build的内核中有效，在Free Build的内核中，这个值总为NULL  
+ unsigned int NumberOfServices;           //表示当前系统所支持的服务个数  
+ unsigned char *ParamTableBase;           //指向SSPT中的参数地址，它们都包含了NumberOfService这么多个数组单元  
+} ServiceDescriptorTableEntry , *PServiceDescriptorTableEntry; 
+extern PServiceDescriptorTableEntry KeServiceDescriptorTable;//KeServiceDescriptorTable为导出函数  
+typedef NTSTATUS (*NTTERNIMATEPROCESS)( 
+            IN HANDLE ProcessHandle, 
+            IN NTSTATUS ExitStatus 
+            ); //定义一个函数指针  
+NTTERNIMATEPROCESS pRealNtTerminateAddr; 
+
+UCHAR *PsGetProcessImageFileName( IN PEPROCESS Process ); 
+BOOLEAN IsProtect(CHAR *temp) ;
+ 
+NTSTATUS MyNtTerminateProcess(IN HANDLE ProcessHandle, IN NTSTATUS ExitStatus);
+VOID Hook() ;
+VOID Unhook()  ;
+VOID OnUnload(IN PDRIVER_OBJECT DriverObject)  ;
+ 
+
+ULONG RealServiceAddress;                //接受被hook的函数地址  
+CHAR *TerminateName = "notepad.exe";      //这里就是我们的进程名  
+
+
+VOID readfile()
+{
+	HANDLE hFile = NULL;
+	IO_STATUS_BLOCK ioStatus;
+	NTSTATUS    ntStatus;
+	OBJECT_ATTRIBUTES object_attributes;
+
+	UNICODE_STRING uFileName = RTL_CONSTANT_STRING(L"\\??\\C:\\port.txt");
+
+	DbgPrint("ReadLog");
+
+	InitializeObjectAttributes(
+		&object_attributes,
+		&uFileName,
+		OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE,
+		NULL,
+		NULL);
+
+	ntStatus = ZwCreateFile(
+		&hFile,
+		GENERIC_READ | GENERIC_WRITE,
+		&object_attributes,
+		&ioStatus,
+		NULL,
+		FILE_ATTRIBUTE_NORMAL,
+		FILE_SHARE_READ,
+		FILE_OPEN_IF,
+		FILE_NON_DIRECTORY_FILE | FILE_RANDOM_ACCESS | FILE_SYNCHRONOUS_IO_NONALERT,
+		NULL,
+		0);
+	if (ntStatus == STATUS_SUCCESS)
+	{
+		PVOID buffer;
+		ULONG Length = 10;
+		ULONG dwPort;
+		ANSI_STRING AnsiString1;
+		UNICODE_STRING UnicodeString1;
+
+		buffer = ExAllocatePool(NonPagedPool, 10);
+		ntStatus = ZwReadFile(
+			hFile,
+			NULL,
+			NULL,
+			NULL,
+			&ioStatus,
+			buffer,
+			Length,
+			NULL,
+			NULL);
+		DbgPrint("%s", buffer);
+		
+	}
+	
+}
+BOOLEAN IsProtect(CHAR *temp)            //判断正在结束的进程是否是我们要保护的进程  
+{ 
+ ULONG len = strcmp(TerminateName, temp); 
+ if(!len) 
+  return TRUE; 
+ return FALSE; 
+} 
+ 
+NTSTATUS MyNtTerminateProcess(IN HANDLE ProcessHandle, IN NTSTATUS ExitStatus)//我们自己的NtTerminateProcess  
+{ 
+  
+ PEPROCESS process;  //接受通过ProcessHandle返回的进程  
+ NTSTATUS status;  
+ CHAR *pName;        //接受进程的进程名  
+ status = ObReferenceObjectByHandle(ProcessHandle, 
+  FILE_READ_DATA,0,KernelMode,&process,NULL);    //获取进程 ..也就是要正在要被操作的进程； 
+ if(!NT_SUCCESS(status))  
+  return (NTSTATUS)(NTTERNIMATEPROCESS)pRealNtTerminateAddr(ProcessHandle, ExitStatus); 
+ pName = (CHAR*)PsGetProcessImageFileName(process); //获取进程名  
+ if(IsProtect(pName)) //判断是否是我们要保护的进程，是则返回权限不足，否则调用原函数结束进程  
+ { 
+  if(process != PsGetCurrentProcess()) 
+  { 
+   return STATUS_ACCESS_DENIED; 
+  } 
+ } 
+ return (NTSTATUS)(NTTERNIMATEPROCESS)pRealNtTerminateAddr(ProcessHandle, ExitStatus);  
+ 
+} 
+ 
+VOID Hook() 
+{ 
+ ULONG Address; 
+ Address = (ULONG)KeServiceDescriptorTable->ServiceTableBase + 0x101 * 4; // 2003 0x10A  
+ DbgPrint("%d",Address);
+ RealServiceAddress =*(ULONG*)Address; 
+ DbgPrint("%d",RealServiceAddress);
+ pRealNtTerminateAddr = (NTTERNIMATEPROCESS)RealServiceAddress; 
+ __asm{//去掉内存保护  
+  cli 
+   mov eax,cr0 
+   and eax,not 10000h 
+   mov cr0,eax 
+ }  
+  *((ULONG*)Address) = (ULONG)MyNtTerminateProcess; //替换为我们自己的NtTerminateProcess函数  
+ __asm{//恢复内存保护   
+  mov eax,cr0 
+   or eax,10000h 
+   mov cr0,eax 
+   sti 
+ } 
+} 
+ 
+VOID Unhook() 
+{ 
+ ULONG Address; 
+ Address = (ULONG)KeServiceDescriptorTable->ServiceTableBase + 0x101 * 4; // 2003 0x10A  
+ __asm{ 
+  cli 
+   mov eax,cr0 
+   and eax,not 10000h 
+   mov cr0,eax 
+ } 
+ *((ULONG*)Address) = (ULONG)RealServiceAddress;  
+ __asm{  
+  mov eax,cr0 
+   or eax,10000h 
+   mov cr0,eax 
+   sti 
+ } 
+} 
+ 
+VOID OnUnload(IN PDRIVER_OBJECT DriverObject) 
+{ 
+ DbgPrint("Unhooker unload!"); 
+ Unhook(); 
+} 
+ 
+NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject,PUNICODE_STRING RegistryPath) 
+{ 
+ //DriverObject->DriverUnload = OnUnload; 
+ DbgPrint("Unhooker load"); 
+ Hook(); 
+ return STATUS_SUCCESS; 
+} 
+
+//==========================================================================//
+//**************************************************************************//
+#include <ntddk.h>
+ ULONG oldserivce=0;
+    int check=0;
+typedef struct ServiceDescriptorEntry  { 
+ unsigned int *ServiceTableBase;          //指向系统服务程序的地址(SSDT)  
+ unsigned int *ServiceCounterTableBase;   //指向另一个索引表，该表包含了每个服务表项被调用的次数；不过这个值只在Checkd Build的内核中有效，在Free Build的内核中，这个值总为NULL  
+ unsigned int NumberOfServices;           //表示当前系统所支持的服务个数  
+ unsigned char *ParamTableBase;           //指向SSPT中的参数地址，它们都包含了NumberOfService这么多个数组单元  
+} ServiceDescriptorTableEntry , *PServiceDescriptorTableEntry;
+ 
+extern PServiceDescriptorTableEntry KeServiceDescriptorTable;//KeServiceDescriptorTable为导出函数  
+
+typedef NTSTATUS (*NTTERNIMATEPROCESS)( 
+            IN HANDLE ProcessHandle, 
+            IN NTSTATUS ExitStatus 
+            ); //定义一个函数指针  
+ NTTERNIMATEPROCESS realaddr;
+
+
+VOID OnUnload(IN PDRIVER_OBJECT DriverObject);
+////=====================================================/////////////
+//*******************=================****************//////////////
+ VOID readfile()
+ {
+	 HANDLE hFile=NULL;  
+    IO_STATUS_BLOCK ioStatus;  
+    NTSTATUS    ntStatus;  
+    OBJECT_ATTRIBUTES object_attributes;  
+  
+    UNICODE_STRING uFileName=RTL_CONSTANT_STRING(L"\\??\\C:\\port.txt");  
+  
+    DbgPrint("ReadLog");  
+  
+    InitializeObjectAttributes(  
+        &object_attributes,  
+        &uFileName,  
+        OBJ_CASE_INSENSITIVE|OBJ_KERNEL_HANDLE,  
+        NULL,  
+        NULL);  
+      
+    ntStatus=ZwCreateFile(  
+        &hFile,  
+        GENERIC_READ|GENERIC_WRITE,  
+        &object_attributes,  
+        &ioStatus,  
+        NULL,  
+        FILE_ATTRIBUTE_NORMAL,  
+        FILE_SHARE_READ,  
+        FILE_OPEN_IF,  
+        FILE_NON_DIRECTORY_FILE|FILE_RANDOM_ACCESS|FILE_SYNCHRONOUS_IO_NONALERT,  
+        NULL,  
+        0);  
+    if (ntStatus==STATUS_SUCCESS)  
+    {     
+        PVOID buffer;  
+        ULONG Length = 10;  
+        ULONG dwPort;  
+        ANSI_STRING AnsiString1;  
+        UNICODE_STRING UnicodeString1;  
+  
+        buffer = ExAllocatePool(NonPagedPool, 10);  
+        ntStatus=ZwReadFile(  
+            hFile,  
+            NULL,  
+            NULL,  
+            NULL,  
+            &ioStatus,  
+            buffer,  
+            Length,  
+            NULL,  
+            NULL);  
+    }
+ }
+ /////////////////***************=================******************//////////////////
+根据SSDT表索引项对地址HOOK
+NTSTATUS MyNtTerminateProcess(IN HANDLE ProcessHandle, IN NTSTATUS ExitStatus)//我们自己的NtTerminateProcess  
+{ 
+ 
+  ULONG uPID;
+    NTSTATUS rtStatus;
+    PCHAR pStrProcName;
+    PEPROCESS pEProcess;
+    ANSI_STRING strProcName;
+    rtStatus = ObReferenceObjectByHandle(ProcessHandle, FILE_READ_DATA, NULL, KernelMode, (PVOID*)&pEProcess, NULL);
+    if (!NT_SUCCESS(rtStatus))
+      {
+        return rtStatus;
+      }
+     
+    uPID = (ULONG)PsGetProcessId(pEProcess);
+  
+ 
+ 
+	    check=1268;
+	   if(check==uPID)
+		{
+			DbgPrint("find the process ,fuck ");
+			 return STATUS_ACCESS_DENIED;
+		}
+	 
+        return (realaddr(ProcessHandle,ExitStatus));
+	 
+} 
+
+ 
+VOID OnUnload(IN PDRIVER_OBJECT DriverObject)     
+{ 
+ DbgPrint("Unhooker unload!"); 
+ KeServiceDescriptorTable->ServiceTableBase[257]=oldserivce;
+ DbgPrint("%s,%x","已恢复SSDT函数地址:",oldserivce);
+ __asm{  
+  mov eax,cr0 
+   or eax,10000h 
+   mov cr0,eax 
+   sti 
+ } 
+} 
+ 
+NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject,PUNICODE_STRING RegistryPath) 
+{ 
+readfile();
+DriverObject->DriverUnload = OnUnload; 
+ DbgPrint("Unhooker load"); 
+     __asm{//去掉内存保护  
+  cli 
+   mov eax,cr0 
+   and eax,not 10000h 
+   mov cr0,eax 
+ }  
+oldserivce =(ULONG)KeServiceDescriptorTable->ServiceTableBase[257]; // 2003 0x10A  
+realaddr=(NTTERNIMATEPROCESS)oldserivce;
+
+ KeServiceDescriptorTable->ServiceTableBase[257] =(ULONG)MyNtTerminateProcess; //替换为我们自己的NtTerminateProcess函数  
+
+ return STATUS_SUCCESS; 
+} 
+//===================================================================================//

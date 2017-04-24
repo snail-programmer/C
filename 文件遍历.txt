@@ -1,0 +1,52 @@
+//线程文件遍历核心代码 
+BOOL once = TRUE;
+	CFileFind findfile;
+	CString newpath;
+	CString createpath;
+	POSITION position;
+	CStringList pathlist;
+	int n_i, w_i, filenum, scan_jg;
+	CString files = NULL;
+	DWORD _stdcall dthread(PVOID pvoid)
+	{
+		BOOL once = TRUE;
+		newpath = _T("C:");
+		while (true)
+		{
+
+			CavsoeDlg *avso = (CavsoeDlg*)AfxGetApp()->m_pMainWnd;    //获取窗体指针
+			CFileFind find = NULL;
+			BOOL isfind = find.FindFile(newpath + _T("\\*.*"), 0);
+			while (isfind)
+			{
+				isfind = find.FindNextFileW();
+				if (!find.IsDots() && find.IsDirectory())
+				{
+					n_i++;
+					pathlist.AddTail(find.GetFilePath());
+				}
+				filenum++;
+				scan_jg++;
+				if (scan_jg >= 50)
+				{
+					files.Format(_T("%d"), filenum);
+					avso->GetDlgItem(IDC_STATIC)->SetWindowTextW(find.GetFilePath());
+				}
+				Sleep(100);
+			}
+			if (once)
+			{
+				position = pathlist.GetHeadPosition();
+				once = false;
+			}
+			if (w_i < n_i)
+				newpath = pathlist.GetNext(position);
+			else
+			{
+				pathlist.RemoveAll();
+				MessageBox(NULL, files, NULL, NULL);
+				ExitThread(0);
+			}
+	 		w_i++;
+		}
+	}

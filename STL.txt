@@ -1,0 +1,16 @@
+#include "stdafx.h"
+#include <map>
+#include <string>
+#include <iostream>
+using namespace std;
+void main()
+{
+	map<int, string> mapStudent;
+	mapStudent.insert(pair<int, string>(0, "admin"));
+	map<int, string>::iterator  iter;
+	for (iter = mapStudent.begin(); iter != mapStudent.end(); iter++)
+	{
+		cout << iter->first << ":" << iter->second << endl;
+	}
+	system("pause");
+}

@@ -1,0 +1,18 @@
+	//修改进程调试权限
+	HANDLE token;
+	OpenProcessToken(GetCurrentProcess(), TOKEN_ALL_ACCESS, &token);
+	if (token)
+		MessageBox(_T("获取进程令牌访问句柄"));
+	else
+		MessageBox(_T("无法获取进程令牌访问句柄"));
+	TOKEN_PRIVILEGES g_token;
+	TOKEN_PRIVILEGES s_token;
+	g_token.PrivilegeCount = 1;
+	LookupPrivilegeValue(NULL, SE_DEBUG_NAME, &g_token.Privileges[0].Luid);
+	g_token.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+	if(AdjustTokenPrivileges(token, FALSE, &g_token,sizeof(TOKEN_PRIVILEGES),NULL, NULL))
+		MessageBox(_T("修改进程调试权限成功"));
+	else
+		MessageBox(_T("修改进程调试权限失败"));
+	CloseHandle(token);
+	//提权结果

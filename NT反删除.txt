@@ -1,0 +1,76 @@
+#include <ntddk.h>
+ULONG oldservice;    
+
+typedef struct ServiceDescriptorEntry{ 
+ unsigned int *ServiceTableBase;          //指向系统服务程序的地址(SSDT)  
+ unsigned int *ServiceCounterTableBase;   //指向另一个索引表，该表包含了每个服务表项被调用的次数
+ unsigned int NumberOfServices;           //表示当前系统所支持的服务个数  
+ unsigned char *ParamTableBase;           //指向SSPT中的参数地址，它们都包含了NumberOfService这么多个数组单元  
+} ServiceDescriptorTableEntry , *PServiceDescriptorTableEntry;
+extern PServiceDescriptorTableEntry KeServiceDescriptorTable;//KeServiceDescriptorTable为导出函数  
+wchar_t *protect=L"\\??\\C:\\virus\\";
+wchar_t *pathname=L"";
+typedef NTSTATUS (_stdcall *NtFile)
+(
+  OUT PHANDLE             FileHandle,
+  IN ACCESS_MASK          DesiredAccess,
+  IN POBJECT_ATTRIBUTES   ObjectAttributes,
+  OUT PIO_STATUS_BLOCK    IoStatusBlock,
+  IN ULONG                ShareAccess,
+  IN ULONG                OpenOptions 
+  );
+
+ NtFile  realaddr; 
+
+
+ NTSTATUS MyNtOpenFile(
+  OUT PHANDLE             FileHandle,
+  IN ACCESS_MASK          DesiredAccess,
+  IN POBJECT_ATTRIBUTES   ObjectAttributes,
+  OUT PIO_STATUS_BLOCK    IoStatusBlock,
+  IN ULONG                ShareAccess,
+  IN ULONG                OpenOptions)  
+ {
+ 	pathname=ObjectAttributes->ObjectName->Buffer;
+      if (wcsstr(pathname,protect)!=NULL)
+      {
+      	return STATUS_ACCESS_DENIED;
+      }
+	  else
+	  {
+	  	DbgPrint("%s\n",pathname);
+	    return(realaddr(FileHandle,DesiredAccess,ObjectAttributes,IoStatusBlock,ShareAccess,OpenOptions));
+	  }
+  	 	
+ }
+NTSTATUS DriverUnload(PDRIVER_OBJECT pDriverObject)
+{
+//驱动卸载恢复被HOOK的函数地址
+ DbgPrint("Unhooker unload!"); 
+ KeServiceDescriptorTable->ServiceTableBase[116]=oldservice;
+ DbgPrint("%s,%x","已恢复SSDT函数地址:",oldservice);
+/* __asm {  //打开内存页面写保护
+	 mov eax, cr0
+	 or eax, 10000h
+	 mov cr0, eax
+	 sti
+ }*/
+	DbgPrint("驱动程序已卸载!");
+	return STATUS_SUCCESS;
+}
+NTSTATUS DriverEntry(PDRIVER_OBJECT pDriverObject, PUNICODE_STRING pRegsiterPath)
+{
+pDriverObject->DriverUnload = DriverUnload;
+ DbgPrint("hook load"); 
+oldservice=(ULONG)KeServiceDescriptorTable->ServiceTableBase[116];         //保存系统原函数地址
+ realaddr=(NtFile)oldservice;        //@@@@@@@@@@@@@@@@@@                               
+ KeServiceDescriptorTable->ServiceTableBase[116]=(ULONG)MyNtOpenFile;//替换函数地址@@@@@@@@@@@@@@@@@@@@
+   /*  __asm{//去掉内存保护  
+  cli 
+   mov eax,cr0 
+   and eax,not 10000h 
+   mov cr0,eax 
+ }  
+ */
+	return STATUS_SUCCESS;
+}

@@ -1,0 +1,33 @@
+void CMbutton::DrawItem(LPDRAWITEMSTRUCT  lpDrawItemStruct )
+{
+	CDC pdc;
+	pdc.Attach(lpDrawItemStruct->hDC);
+	CRect rect = lpDrawItemStruct->rcItem;
+	CBrush brush;
+	brush.CreateSolidBrush(RGB(100,100, 255));
+	pdc.SelectObject(&brush);
+	CPen pen(PS_SOLID, 2, RGB(200,200,255));
+	pdc.SelectObject(&pen);
+	CRect rec(0, 0, 100, 30);
+	POINT pt;
+	pt.x = 30;pt.y = 30;
+	pdc.RoundRect(&rec, pt);
+	pdc.SetTextColor(RGB(255, 255, 255));
+	pdc.SetBkMode(TRANSPARENT);
+
+	pdc.DrawText(_T("Circle"), &rec, DT_CENTER | DT_VCENTER|DT_SINGLELINE);
+}
+
+
+void CMbutton::PreSubclassWindow()
+{
+	// TODO: 在此添加专用代码和/或调用基类
+ 
+	CRgn rgn;
+	CRect  rct;
+	rgn.CreateEllipticRgnIndirect(&rct);
+	::SetWindowRgn(GetSafeHwnd(), (HRGN)rgn, true);
+
+ 
+	CButton::PreSubclassWindow();
+}

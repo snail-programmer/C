@@ -1,0 +1,23 @@
+//com组件添加的ATL类名称为mine,com接口名为Imine
+
+#import "D:\vs\mine\mine\Release\\mine.tlb"  //导入文件
+
+void main()
+{
+	HRESULT hr = CoInitialize(NULL);
+	CLSID clsid;
+	hr = CLSIDFromProgID(OLESTR("mine.math"), &clsid);
+	if (FAILED(hr))
+		AfxMessageBox(_T("调用com失败!"));
+	else
+	{
+		AfxMessageBox(_T("调用com成功!"));
+		Imine *v = NULL;
+		hr = CoCreateInstance(clsid, NULL, CLSCTX_INPROC_SERVER, __uuidof(Imine), (LPVOID*)&v); //创建com组件
+		long no_pm = 0;
+		hr=v->add(3, 2,&no_pm);
+		CString s(_T(""));
+		s.Format(_T("%d"), no_pm);
+		MessageBox(s);
+	}
+}
